@@ -1,11 +1,12 @@
-"use client";
+"use client"
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const SpeechToTextAndTextToSpeech = () => {
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
@@ -15,16 +16,17 @@ const SpeechToTextAndTextToSpeech = () => {
     const setupMediaRecorder = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (event) => {
           audioChunks.push(event.data);
         };
 
-        mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-          setAudioBlob(audioBlob);
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const wavBlob = await convertToWav(audioBlob);
+          setAudioBlob(wavBlob);
           audioChunks = [];
         };
       } catch (err: any) {
@@ -41,6 +43,64 @@ const SpeechToTextAndTextToSpeech = () => {
       }
     };
   }, []);
+
+  const convertToWav = async (blob: Blob): Promise<Blob> => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    const wavBuffer = audioBufferToWav(audioBuffer);
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  };
+
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+
+    const dataLength = buffer.length * blockAlign;
+    const bufferLength = 44 + dataLength;
+
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+
+    // Write WAV header
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    // Write audio data
+    const offset = 44;
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      const channel = buffer.getChannelData(i);
+      for (let j = 0; j < channel.length; j++) {
+        const sample = Math.max(-1, Math.min(1, channel[j]));
+        view.setInt16(offset + (j * blockAlign) + (i * bytesPerSample), sample * 0x7FFF, true);
+      }
+    }
+
+    return arrayBuffer;
+  };
+
+  const writeString = (view: DataView, offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
 
   const toggleListening = useCallback(() => {
     setError(null);
@@ -62,18 +122,18 @@ const SpeechToTextAndTextToSpeech = () => {
       setError('No audio recorded. Please speak and stop recording before transcribing.');
       return;
     }
-  
+
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.wav');
-  
+
       console.log('Sending request to /api/service');
       const response = await axios.post('/api/service?endpoint=stt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-  
+
       console.log('Received response:', response.data);
       setTranscript(response.data.text);
     } catch (error: any) {
@@ -111,12 +171,11 @@ const SpeechToTextAndTextToSpeech = () => {
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
       source.start(0);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error converting text to speech:', err);
-      setError('Failed to convert text to speech. Please try again.');
+      setError(`Failed to convert text to speech: ${err.message}`);
     }
   }, [transcript]);
-
 
   return (
     <div className="space-y-4">

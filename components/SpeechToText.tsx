@@ -62,18 +62,18 @@ const SpeechToTextAndTextToSpeech = () => {
       setError('No audio recorded. Please speak and stop recording before transcribing.');
       return;
     }
-
+  
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.wav');
-
+  
       console.log('Sending request to /api/service');
       const response = await axios.post('/api/service?endpoint=stt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-
+  
       console.log('Received response:', response.data);
       setTranscript(response.data.text);
     } catch (error: any) {
@@ -87,7 +87,7 @@ const SpeechToTextAndTextToSpeech = () => {
       } else {
         console.error('Error setting up request:', error.message);
       }
-      setError(`Failed to process audio: ${error.message}`);
+      setError(`Failed to process audio: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -117,7 +117,7 @@ const SpeechToTextAndTextToSpeech = () => {
     }
   }, [transcript]);
 
-  
+
   return (
     <div className="space-y-4">
       <button

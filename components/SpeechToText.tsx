@@ -96,15 +96,12 @@ const SpeechToTextAndTextToSpeech = () => {
       setError('No text to convert. Please speak or type something first.');
       return;
     }
-
+  
     try {
       const response = await axios.post(
         '/api/service?endpoint=tts',
         { text: transcript },
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
           responseType: 'arraybuffer',
         }
       );
@@ -120,6 +117,7 @@ const SpeechToTextAndTextToSpeech = () => {
     }
   }, [transcript]);
 
+  
   return (
     <div className="space-y-4">
       <button

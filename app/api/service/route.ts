@@ -20,22 +20,33 @@ export async function POST(req: NextRequest) {
   console.log('Target URL:', url);
 
   try {
-    const formData = new FormData();
-    const buffer = await req.arrayBuffer();
-    formData.append('file', Buffer.from(buffer), {
-      filename: 'audio.wav',
-      contentType: 'audio/wav',
-    });
+    let data;
+    let headers = {
+      'X-App-ID': APP_ID,
+      'X-App-Key': APP_KEY,
+    };
+
+    if (endpoint === 'stt') {
+      const formData = new FormData();
+      const buffer = await req.arrayBuffer();
+      formData.append('file', new Blob([buffer]), 'audio.wav');
+      data = formData;
+      headers = {
+        ...headers,
+        ...formData.getHeaders(),
+      };
+    } else if (endpoint === 'tts') {
+      const json = await req.json();
+      data = json;
+      headers['Content-Type'] = 'application/json';
+    }
 
     console.log('Sending request to STT/TTS service');
-    const response = await axios.post(url, formData, {
-      headers: {
-        ...formData.getHeaders(),
-        'X-App-ID': APP_ID,
-        'X-App-Key': APP_KEY,
-      },
+    const response = await axios.post(url, data, {
+      headers: headers,
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
+      timeout: 30000, // 30 seconds timeout
     });
 
     console.log('Received response from STT/TTS service');
@@ -44,7 +55,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
       }
     });
   } catch (error: any) {
@@ -57,21 +68,26 @@ export async function POST(req: NextRequest) {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
         }
       }
     );
   }
 }
 
-export const dynamic = 'force-dynamic';
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-export async function OPTIONS(req: NextRequest) {
+export function OPTIONS(req: NextRequest) {
   return NextResponse.json({}, {
+    status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
     },
   });
 }

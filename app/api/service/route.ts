@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import FormData from 'form-data';
+import { FormData } from 'formdata-node';
 
 const APP_ID = process.env.NEXT_PUBLIC_TTS_APP_ID;
 const APP_KEY = process.env.NEXT_PUBLIC_TTS_APP_KEY;
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   console.log('Received request to /api/service');
@@ -21,9 +23,9 @@ export async function POST(req: NextRequest) {
 
   try {
     let data;
-    let headers = {
-      'X-App-ID': APP_ID,
-      'X-App-Key': APP_KEY,
+    let headers: Record<string, string> = {
+      'X-App-ID': APP_ID!,
+      'X-App-Key': APP_KEY!,
     };
 
     if (endpoint === 'stt') {
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
       data = formData;
       headers = {
         ...headers,
-        ...formData.getHeaders(),
+        ...formData.headers,
       };
     } else if (endpoint === 'tts') {
       const json = await req.json();
@@ -75,13 +77,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-export function OPTIONS(req: NextRequest) {
+export async function OPTIONS(req: NextRequest) {
   return NextResponse.json({}, {
     status: 200,
     headers: {

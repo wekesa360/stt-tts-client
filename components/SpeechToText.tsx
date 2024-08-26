@@ -116,24 +116,24 @@ const SpeechToTextAndTextToSpeech = () => {
     }
     setIsListening(!isListening);
   }, [isListening]);
-
+  
   const processTranscript = async () => {
     if (!audioBlob) {
       setError('No audio recorded. Please speak and stop recording before transcribing.');
       return;
     }
-
+  
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.wav');
-
+  
       console.log('Sending request to /api/service');
       const response = await axios.post('/api/service?endpoint=stt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-
+  
       console.log('Received response:', response.data);
       setTranscript(response.data.text);
     } catch (error: any) {

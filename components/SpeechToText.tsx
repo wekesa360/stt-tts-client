@@ -2,14 +2,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
-const APP_ID = process.env.NEXT_PUBLIC_TTS_APP_ID || 'your-app-id'
-const APP_KEY = process.env.NEXT_PUBLIC_TTS_APP_KEY || 'your-app-key'
-
 const SpeechToTextAndTextToSpeech = () => {
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState(null);
-  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   useEffect(() => {
@@ -60,18 +57,25 @@ const SpeechToTextAndTextToSpeech = () => {
     setIsListening(!isListening);
   }, [isListening]);
 
-  const processTranscript = async (audioBlob: Blob) => {
+  const processTranscript = async () => {
+    if (!audioBlob) {
+      setError('No audio recorded. Please speak and stop recording before transcribing.');
+      return;
+    }
+
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.wav');
-  
+
+      console.log('Sending request to /api/service');
       const response = await axios.post('/api/service?endpoint=stt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-  
-      return response.data.text;
+
+      console.log('Received response:', response.data);
+      setTranscript(response.data.text);
     } catch (error: any) {
       console.error('Error processing audio:', error);
       if (error.response) {
@@ -83,7 +87,7 @@ const SpeechToTextAndTextToSpeech = () => {
       } else {
         console.error('Error setting up request:', error.message);
       }
-      throw new Error(`Failed to process audio: ${error.message}`);
+      setError(`Failed to process audio: ${error.message}`);
     }
   };
 
@@ -115,8 +119,6 @@ const SpeechToTextAndTextToSpeech = () => {
       setError('Failed to convert text to speech. Please try again.');
     }
   }, [transcript]);
-
-
 
   return (
     <div className="space-y-4">

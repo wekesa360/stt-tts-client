@@ -5,12 +5,6 @@ import FormData from 'form-data';
 const APP_ID = process.env.TTS_APP_ID;
 const APP_KEY = process.env.TTS_APP_KEY;
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 export async function POST(req: NextRequest) {
   const endpoint = req.nextUrl.searchParams.get('endpoint');
 
@@ -34,6 +28,8 @@ export async function POST(req: NextRequest) {
         'X-App-ID': APP_ID,
         'X-App-Key': APP_KEY,
       },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
     });
 
     return NextResponse.json(response.data, { status: response.status });
@@ -46,3 +42,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const dynamic = 'force-dynamic';

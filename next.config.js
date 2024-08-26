@@ -1,11 +1,17 @@
-module.exports = {
-    webpack: (config, { isServer }) => {
-        if (!isServer) {
-            config.resolve.fallback = {
-                ...config.resolve.fallback,
-                fs: false,
-            };
-        }
-        return config;
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+    typescript: {
+        ignoreBuildErrors: true,
+      },
+    reactStrictMode: true,
+    async rewrites() {
+      return [
+        {
+          source: '/api/:path*',
+          destination: 'https://stt-tts.onrender.com/:path*',
+        },
+      ]
     },
-};
+  }
+  
+  module.exports = nextConfig

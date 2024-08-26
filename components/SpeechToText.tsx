@@ -60,27 +60,32 @@ const SpeechToTextAndTextToSpeech = () => {
     setIsListening(!isListening);
   }, [isListening]);
 
-  const processTranscript = useCallback(async () => {
-    if (!audioBlob) {
-      setError('No audio recorded. Please start listening and speak first.');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.wav');
-
+  const processTranscript = async (audioBlob: Blob) => {
     try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.wav');
+  
       const response = await axios.post('/api/service?endpoint=stt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      setTranscript(response.data.text);
-    } catch (err) {
-      console.error('Error processing audio:', err);
-      setError('Failed to process audio. Please try again.');
+  
+      return response.data.text;
+    } catch (error: any) {
+      console.error('Error processing audio:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error setting up request:', error.message);
+      }
+      throw new Error(`Failed to process audio: ${error.message}`);
     }
-  }, [audioBlob]);
+  };
 
   const textToSpeech = useCallback(async () => {
     if (!transcript) {

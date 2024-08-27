@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { FormData } from 'formdata-node';
 
-const APP_ID = process.env.NEXT_PUBLIC_TTS_APP_ID;
-const APP_KEY = process.env.NEXT_PUBLIC_TTS_APP_KEY;
+const APP_ID = process.env.APP_ID;
+const APP_KEY = process.env.APP_KEY;
+const BASE_URL = process.env.TTS_URL;
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Invalid endpoint' }, { status: 400 });
   }
 
-  const url = `https://stt-tts.onrender.com/${endpoint}`;
+  const url = `${BASE_URL}/${endpoint}`;
   console.log('Target URL:', url);
 
   try {
@@ -29,15 +29,12 @@ export async function POST(req: NextRequest) {
     };
 
     if (endpoint === 'stt') {
-      const formData = new FormData();
-      const buffer = await req.arrayBuffer();
-      formData.append('file', new Blob([buffer]), 'audio.wav');
-      data = formData;
-      headers = {
-        ...headers,
-        ...formData.headers,
-      };
+      // For STT, we want to forward the raw audio data
+      data = await req.arrayBuffer();
+      headers['Content-Type'] = 'audio/wav';
+      console.log('Received file size:', data.byteLength);
     } else if (endpoint === 'tts') {
+      // For TTS, we keep the JSON handling
       const json = await req.json();
       data = json;
       headers['Content-Type'] = 'application/json';
@@ -49,25 +46,90 @@ export async function POST(req: NextRequest) {
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
       timeout: 30000, // 30 seconds timeout
+      responseType: endpoint === 'tts' ? 'arraybuffer' : 'json',
     });
 
     console.log('Received response from STT/TTS service');
-    return NextResponse.json(response.data, { 
-      status: response.status,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
+
+    if (endpoint === 'tts') {
+      console.log('TTS Response Status:', response.status);
+      console.log('TTS Response Headers:', response.headers);
+      
+      console.log('TTS Response Content-Type:', response.headers['content-type']);
+      
+      let audioData;
+      if (Buffer.isBuffer(response.data)) {
+        // If response.data is already a Buffer, convert it to a string
+        audioData = response.data.toString('utf-8');
+      } else if (typeof response.data === 'string') {
+        audioData = response.data;
+      } else if (typeof response.data === 'object' && response.data.audio) {
+        audioData = response.data.audio;
+      } else {
+        throw new Error('Unexpected response format from TTS service');
       }
-    });
+    
+      // Try to parse the audio data as JSON
+      try {
+        const parsedData = JSON.parse(audioData);
+        if (parsedData && parsedData.audio) {
+          audioData = parsedData.audio;
+        }
+      } catch (e) {
+        // If parsing fails, assume audioData is already in the correct format
+      }
+    
+      console.log('First 50 characters of audio data:', audioData.slice(0, 50));
+      
+      return new NextResponse(
+        JSON.stringify({ audio: audioData }),
+        { 
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
+          }
+        }
+      );
+    } else {
+      return new NextResponse(
+        JSON.stringify(response.data),
+        { 
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
+          }
+        }
+      );
+    }
   } catch (error: any) {
     console.error('Proxy error:', error.message);
-    console.error('Error response:', error.response?.data);
-    return NextResponse.json(
-      error.response?.data || { message: 'Internal Server Error' },
+    let errorMessage = 'Internal Server Error';
+    let statusCode = 500;
+
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+      errorMessage = error.response.data.message || `Error from ${endpoint.toUpperCase()} service`;
+      statusCode = error.response.status;
+    } else if (error.request) {
+      console.error('No response received:', error.request);
+      errorMessage = `No response received from ${endpoint.toUpperCase()} service`;
+    } else {
+      console.error('Error setting up request:', error.message);
+      errorMessage = `Error setting up request to ${endpoint.toUpperCase()} service`;
+    }
+
+    return new NextResponse(
+      JSON.stringify({ message: errorMessage }),
       { 
-        status: error.response?.status || 500,
+        status: statusCode,
         headers: {
+          'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-ID, X-App-Key',
@@ -78,7 +140,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function OPTIONS(req: NextRequest) {
-  return NextResponse.json({}, {
+  return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
